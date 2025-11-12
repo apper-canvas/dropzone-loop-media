@@ -12,20 +12,50 @@ const FileUploader = () => {
   const [uploadFiles, setUploadFiles] = useState([]);
   const [config, setConfig] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const loadConfig = async () => {
+      setLoading(true);
       try {
+        await uploadService.loadConfig();
         const uploadConfig = uploadService.getConfig();
         setConfig(uploadConfig);
-      } catch (error) {
+} catch (error) {
         console.error("Failed to load config:", error);
         toast.error("Failed to load upload settings");
+      } finally {
+        setLoading(false);
       }
     };
 
     loadConfig();
+    loadUploadHistory();
   }, []);
+
+  const loadUploadHistory = async () => {
+    try {
+      const history = await uploadService.getUploadHistory();
+      const historyFiles = history.map(record => ({
+        id: record.Id,
+        file_id_c: record.file_id_c,
+        name: record.name_c,
+        size: record.size_c,
+        type: record.type_c,
+        status: record.status_c === 'complete' ? 'complete' : record.status_c === 'failed' ? 'failed' : 'queued',
+        progress: record.progress_c || 0,
+        uploadSpeed: record.upload_speed_c || 0,
+        thumbnail: null, // thumbnails not stored in database
+        error: record.error_c,
+        uploadedAt: record.uploaded_at_c,
+        // Keep database record reference
+        dbRecord: record
+      }));
+      setUploadFiles(historyFiles);
+    } catch (error) {
+      console.error("Failed to load upload history:", error);
+    }
+  };
 
   const addFiles = useCallback(async (files) => {
     if (!config) return;
@@ -51,10 +81,10 @@ const FileUploader = () => {
 
       // Generate thumbnail for images
       const thumbnail = await generateThumbnail(file);
-
-      const uploadFile = {
+const uploadFile = {
         id: generateFileId(),
         file,
+        file_id_c: null, // Will be set during upload
         name: file.name,
         size: file.size,
         type: file.type,
@@ -112,11 +142,9 @@ const FileUploader = () => {
         // Update final status
         setUploadFiles(prev => prev.map(f => 
           f.id === uploadFile.id ? result : f
-        ));
+));
 
-        // Save to history
-        uploadService.saveToHistory(result);
-
+        // Database save is handled in uploadService.uploadFile
         if (result.status === "complete") {
           toast.success(`${result.name} uploaded successfully`);
         } else {
@@ -158,22 +186,36 @@ const FileUploader = () => {
   const handleConfigChange = useCallback((newConfig) => {
     uploadService.saveConfig(newConfig);
     setConfig(newConfig);
-    toast.success("Settings updated successfully");
+toast.success("Settings updated successfully");
   }, []);
 
-  const clearCompleted = useCallback(() => {
-    const completedCount = uploadFiles.filter(f => f.status === "complete").length;
-    if (completedCount === 0) {
+  const clearCompleted = useCallback(async () => {
+    const completedFiles = uploadFiles.filter(f => f.status === "complete");
+    if (completedFiles.length === 0) {
       toast.info("No completed uploads to clear");
       return;
     }
 
-    setUploadFiles(prev => prev.filter(f => f.status !== "complete"));
-    toast.success(`Cleared ${completedCount} completed upload${completedCount > 1 ? "s" : ""}`);
+    try {
+      await uploadService.clearHistory();
+      await loadUploadHistory(); // Reload from database
+    } catch (error) {
+      console.error("Failed to clear completed uploads:", error);
+      toast.error("Failed to clear completed uploads");
+    }
   }, [uploadFiles]);
-
-  if (!config) {
-    return null;
+if (!config || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <svg className="animate-spin h-12 w-12 text-primary mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          <p className="text-gray-600">Loading DropZone...</p>
+        </div>
+      </div>
+    );
   }
 
   const queuedFiles = uploadFiles.filter(f => f.status === "queued");

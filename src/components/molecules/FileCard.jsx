@@ -11,7 +11,7 @@ const FileCard = ({
   onRetry,
   showRemove = true 
 }) => {
-  const { file, name, size, status, progress, uploadSpeed, thumbnail, error } = uploadFile;
+const { file, name, size, status, progress, uploadSpeed, thumbnail, error, file_id_c } = uploadFile;
   
   const getStatusBadge = () => {
     const configs = {

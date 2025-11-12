@@ -30,7 +30,7 @@ const SettingsPanel = ({
     { value: ".zip,.rar,.7z", label: "Archives" }
   ];
 
-  const handleSave = () => {
+const handleSave = () => {
     onConfigChange?.(localConfig);
     setIsOpen(false);
   };
