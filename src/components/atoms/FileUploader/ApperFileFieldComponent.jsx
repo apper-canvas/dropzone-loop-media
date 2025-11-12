@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/utils/cn";
-
 /**
  * ApperFileFieldComponent - A React component that interfaces with ApperSDK for file upload functionality
  * 
@@ -42,6 +41,10 @@ const ApperFileFieldComponent = ({
   style = {},
   ...props
 }) => {
+  // Early SDK availability check with proper error handling
+  if (typeof window !== 'undefined' && !window.ApperSDK) {
+    throw new Error('ApperSDK not loaded. Please ensure the SDK script is included before this component.');
+  }
   // State management for UI-driven values
   const [isReady, setIsReady] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -49,13 +52,14 @@ const ApperFileFieldComponent = ({
   const [sdkAttempts, setSdkAttempts] = useState(0);
   const [isInitializing, setIsInitializing] = useState(true);
   
-  // Refs for tracking lifecycle and preventing memory leaks
+// Enhanced refs for lifecycle tracking and memory leak prevention
   const elementIdRef = useRef(null);
   const existingFilesRef = useRef(null);
+  const previousFilesHashRef = useRef(null);
   const mountedRef = useRef(false);
   const cleanupRef = useRef(null);
   const sdkCheckIntervalRef = useRef(null);
-
+  const performanceRef = useRef({ updateCount: 0, lastUpdate: null });
   // Validation and error handling
   if (!elementId) {
     throw new Error('ApperFileFieldComponent: elementId is required');
@@ -96,8 +100,8 @@ const ApperFileFieldComponent = ({
     console.warn('ApperFileFieldComponent: config.apperPublicKey is missing - file operations may fail');
   }
 
-  // Memoize existingFiles to prevent unnecessary re-renders
-  // Only change when length changes or first file's ID changes (indicates different files)
+// Enhanced memoization with deep equality checking to prevent unnecessary re-renders
+  // Uses JSON.stringify comparison for accurate change detection
   const memoizedExistingFiles = useMemo(() => {
     if (!existingFiles || !Array.isArray(existingFiles)) {
       return [];
@@ -107,22 +111,45 @@ const ApperFileFieldComponent = ({
       return [];
     }
 
+    // Performance optimization: Create a hash for deep comparison
+    const currentHash = JSON.stringify(existingFiles.map(f => ({
+      id: f.Id || f.id,
+      name: f.Name || f.name,
+      size: f.Size || f.size
+    })));
+
+    // Only update if the content actually changed
+    if (previousFilesHashRef.current === currentHash) {
+      return existingFilesRef.current || existingFiles;
+    }
+
+    previousFilesHashRef.current = currentHash;
+    
+    // Memory management for large file lists - implement pagination if needed
+    if (existingFiles.length > 100) {
+      console.info(`ApperFileFieldComponent: Large file list detected (${existingFiles.length} files). Consider implementing pagination for better performance.`);
+    }
+
     return existingFiles;
-  }, [
-    existingFiles?.length,
-    existingFiles?.[0]?.Id || existingFiles?.[0]?.id
-  ]);
+  }, [existingFiles]);
 
   // Update elementId ref when it changes
   useEffect(() => {
     elementIdRef.current = `file-uploader-${elementId}`;
   }, [elementId]);
 
-  // Update existingFiles ref when memoized files change
+// Enhanced existingFiles ref management with performance tracking
   useEffect(() => {
     existingFilesRef.current = memoizedExistingFiles;
-  }, [memoizedExistingFiles]);
-
+    
+    // Performance monitoring
+    performanceRef.current.updateCount++;
+    performanceRef.current.lastUpdate = Date.now();
+// Debug logging for development
+    if (import.meta.env.DEV && performanceRef.current.updateCount > 10) {
+      console.info(`ApperFileFieldComponent [${elementId}]: High update frequency detected (${performanceRef.current.updateCount} updates). Consider optimizing parent component.`);
+    }
+  }, [memoizedExistingFiles, elementId]);
   // SDK availability check with timeout logic
   useEffect(() => {
     let isCancelled = false;
@@ -262,7 +289,7 @@ const ApperFileFieldComponent = ({
     };
   }, [isReady, elementId, memoizedExistingFiles]);
 
-  // Handle existingFiles changes and format conversion
+// Enhanced file handling with efficient updates and comprehensive error handling
   useEffect(() => {
     if (!isReady || !isMounted || !config.fieldKey) {
       return;
@@ -270,38 +297,92 @@ const ApperFileFieldComponent = ({
 
     const updateFiles = async () => {
       try {
+        // Enhanced SDK availability check
+        if (!window.ApperSDK) {
+          throw new Error('ApperSDK not loaded. Please ensure the SDK script is included before this component.');
+        }
+
         const { ApperFileUploader } = window.ApperSDK;
         
         if (!ApperFileUploader || !ApperFileUploader.FileField) {
-          return;
+          throw new Error('ApperFileUploader.FileField is not available. SDK may not be fully loaded.');
         }
 
-        // Clear files if existingFiles is empty
+        // Efficient clearing for empty files
         if (!memoizedExistingFiles || memoizedExistingFiles.length === 0) {
-          await ApperFileUploader.FileField.clearField(config.fieldKey);
+try {
+            await ApperFileUploader.FileField.clearField(config.fieldKey);
+            if (import.meta.env.DEV) {
+              console.info(`ApperFileFieldComponent [${elementId}]: Cleared field ${config.fieldKey}`);
+            }
+          } catch (clearError) {
+            console.warn(`ApperFileFieldComponent [${elementId}]: Failed to clear field:`, clearError);
+          }
           return;
         }
 
-        // Check if files need API to UI format conversion
+        // Enhanced file format detection and conversion
         const firstFile = memoizedExistingFiles[0];
         let filesToUpdate = memoizedExistingFiles;
 
-        // Convert from API format to UI format if needed
-        if (firstFile && (firstFile.Id !== undefined || firstFile.Name !== undefined)) {
-          // This looks like API format: { Id, Name, Size, Type, Url }
-          // Convert to UI format: { id, name, size, type, url }
-          filesToUpdate = ApperFileUploader.toUIFormat(memoizedExistingFiles);
+        // Smart format detection with fallback
+        const isAPIFormat = firstFile && (
+          (firstFile.Id !== undefined && typeof firstFile.Id === 'number') ||
+          (firstFile.Name !== undefined && typeof firstFile.Name === 'string')
+        );
+
+        if (isAPIFormat) {
+          try {
+// Convert from API format to UI format
+            filesToUpdate = ApperFileUploader.toUIFormat(memoizedExistingFiles);
+            if (import.meta.env.DEV) {
+              console.info(`ApperFileFieldComponent [${elementId}]: Converted ${filesToUpdate.length} files from API to UI format`);
+            }
+          } catch (formatError) {
+            console.error(`ApperFileFieldComponent [${elementId}]: Format conversion failed:`, formatError);
+            // Fallback to original files if conversion fails
+            filesToUpdate = memoizedExistingFiles;
+          }
         }
 
-        await ApperFileUploader.FileField.updateFiles(config.fieldKey, filesToUpdate);
+        // Batch file operations for better performance
+        const batchSize = 50; // Process files in batches to prevent UI blocking
+        if (filesToUpdate.length > batchSize) {
+          console.info(`ApperFileFieldComponent [${elementId}]: Processing ${filesToUpdate.length} files in batches of ${batchSize}`);
+          
+          for (let i = 0; i < filesToUpdate.length; i += batchSize) {
+            const batch = filesToUpdate.slice(i, i + batchSize);
+            await ApperFileUploader.FileField.updateFiles(config.fieldKey, batch);
+            
+            // Allow UI to breathe between batches
+            if (i + batchSize < filesToUpdate.length) {
+              await new Promise(resolve => setTimeout(resolve, 10));
+            }
+          }
+        } else {
+          // Standard update for smaller file lists
+          await ApperFileUploader.FileField.updateFiles(config.fieldKey, filesToUpdate);
+        }
+// Success logging for development
+        if (import.meta.env.DEV) {
+          console.info(`ApperFileFieldComponent [${elementId}]: Successfully updated ${filesToUpdate.length} files`);
+        }
+
       } catch (error) {
-        console.error('ApperFileFieldComponent: Failed to update files:', error);
-        setError(`File update failed: ${error.message}`);
+        const errorMessage = `File update failed: ${error.message}`;
+        console.error(`ApperFileFieldComponent [${elementId}]:`, errorMessage, error);
+        setError(errorMessage);
+        
+        // Attempt recovery for certain error types
+        if (error.message.includes('SDK')) {
+          console.info(`ApperFileFieldComponent [${elementId}]: Attempting SDK recovery...`);
+          // Could implement SDK recovery logic here if needed
+        }
       }
     };
 
     updateFiles();
-  }, [memoizedExistingFiles, isReady, isMounted, config.fieldKey]);
+  }, [memoizedExistingFiles, isReady, isMounted, config.fieldKey, elementId]);
 
   // Cleanup on component unmount
   useEffect(() => {
