@@ -1,0 +1,124 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+@import 'react-toastify/dist/ReactToastify.css';
+
+* {
+  font-family: 'Inter', sans-serif;
+}
+
+/* Custom toast styling */
+.Toastify__toast {
+  @apply rounded-xl font-medium border border-gray-200 text-sm shadow-lg;
+}
+
+.Toastify__toast--success {
+  @apply bg-white text-gray-900 border-success/20;
+}
+
+.Toastify__toast--error {
+  @apply bg-white text-gray-900 border-error/20;
+}
+
+.Toastify__toast--info {
+  @apply bg-white text-gray-900 border-info/20;
+}
+
+.Toastify__toast--warning {
+  @apply bg-white text-gray-900 border-warning/20;
+}
+
+.Toastify__close-button {
+  @apply text-gray-400 hover:text-gray-600;
+}
+
+.Toastify__progress-bar--success {
+  @apply bg-success;
+}
+
+.Toastify__progress-bar--error {
+  @apply bg-error;
+}
+
+.Toastify__progress-bar--info {
+  @apply bg-info;
+}
+
+.Toastify__progress-bar--warning {
+  @apply bg-warning;
+}
+
+/* Animated progress stripes */
+.progress-striped {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.15) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0.15) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 1rem 1rem;
+  animation: progress-bar-stripes 1s linear infinite;
+}
+
+@keyframes progress-bar-stripes {
+  0% {
+    background-position: 1rem 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+
+/* Drag over styles */
+.drag-over {
+  @apply border-primary border-solid transform scale-[1.02];
+  border-width: 3px;
+  background-color: rgba(37, 99, 235, 0.05);
+}
+
+/* File card hover animation */
+.file-card {
+  transition: all 150ms ease-out;
+}
+
+.file-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+}
+
+/* Upload zone pulse animation */
+.upload-pulse {
+  animation: upload-pulse 2s infinite;
+}
+
+@keyframes upload-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.01);
+  }
+}
+
+/* Success checkmark animation */
+.success-checkmark {
+  animation: checkmark-scale 0.3s ease-out;
+}
+
+@keyframes checkmark-scale {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
