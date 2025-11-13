@@ -27,7 +27,7 @@ export const formatTimeRemaining = (seconds) => {
 };
 
 export const isImageFile = (file) => {
-  return file.type.startsWith("image/");
+  return file && file.type && file.type.startsWith("image/");
 };
 
 export const generateThumbnail = (file) => {
@@ -72,6 +72,10 @@ export const generateThumbnail = (file) => {
 };
 
 export const getFileIcon = (file) => {
+  if (!file || !file.type) {
+    return "File";
+  }
+  
   const type = file.type;
   
   if (type.startsWith("image/")) return "Image";
